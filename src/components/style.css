@@ -873,3 +873,23 @@ body {
   width: 24px; 
   height: auto; 
 }
+
+
+/* Add to style.css */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.dashboard-container.dark-mode {
+  background: #181818;
+  color: #eee;
+}
+.dashboard-container.dark-mode input,
+.dashboard-container.dark-mode .modal {
+  background: #222;
+  color: #eee;
+}

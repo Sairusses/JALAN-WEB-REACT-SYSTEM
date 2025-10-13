@@ -2,6 +2,7 @@ import "/src/components/style.css";
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import ForgotPasswordModal from './ForgotPasswordModal'; // Adjust the import based on your file structure
 
 const Login = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgot, setShowForgot] = useState(false); // State to control the Forgot Password modal
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,31 +84,56 @@ const Login = () => {
         return;
       }
 
-      // Check teacher role
-      const { data: teacherRole } = await supabase
-        .from('teachers')
-        .select('*')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (teacherRole) {
-        navigate('/home');
-        return;
-      }
-
       // Check student role
-      const { data: studentRole } = await supabase
+      const { data: student } = await supabase
         .from('students')
         .select('*')
         .eq('email', email)
-        .maybeSingle();
+        .single();
 
-      if (studentRole) {
+      if (student) {
         navigate('/st-home');
         return;
       }
 
-      setError("User role not found. Please contact support.");
+      // Check teacher role
+      const { data: teacher } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (teacher) {
+        navigate('/home');
+        return;
+      }
+
+      // Check admin role
+      const { data: admin } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (admin) {
+        navigate('/admin-home');
+        return;
+      }
+
+      // Check custom user role
+      const { data: custom } = await supabase
+        .from('custom_users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (custom) {
+        navigate('/custom');
+        return;
+      }
+
+      // If not found in any table:
+      alert("User role not found. Please contact support.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -185,6 +212,25 @@ const Login = () => {
             <div className="link">
               Don&apos;t have an account? <Link to="/signup">Sign up</Link>
             </div>
+            <div className="link">
+              <span
+                style={{
+                  color: "#007bff",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  font: "inherit"
+                }}
+                onClick={() => setShowForgot(true)}
+              >
+                Forgot Password?
+              </span>
+            </div>
+            {showForgot && (
+              <ForgotPasswordModal onClose={() => setShowForgot(false)} />
+            )}
           </form>
         </div>
       </div>

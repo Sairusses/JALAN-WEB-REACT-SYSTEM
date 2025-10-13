@@ -1,27 +1,47 @@
 import "/src/components/style.css";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from '../supabaseClient';
 
 const StudentRegistration = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    studentIdNumber: '',
     fullName: '',
     email: '',
     course: '',
-    section: '',
-    yearLevel: '',
+    phoneNumber: '', // Added phone number
     password: '',
     confirmPassword: '',
+    yearLevel: '1st Year', // Set default value here
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+
+  useEffect(() => {
+    // Fetch courses from Supabase
+    const fetchCourses = async () => {
+      setLoadingCourses(true);
+      const { data, error } = await supabase
+        .from('courses')
+        .select('course');
+      if (error) {
+        setCourses([]);
+      } else {
+        setCourses(data.map((c) => c.course));
+      }
+      setLoadingCourses(false);
+    };
+    fetchCourses();
+  }, []);
 
   const handleChange = (e) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { fullName, email, course, section, yearLevel, password, confirmPassword } = formData;
+    const { studentIdNumber, fullName, email, course, phoneNumber, password, confirmPassword } = formData;
 
     if (password !== confirmPassword) {
       alert("Passwords do not match!");
@@ -43,7 +63,14 @@ const StudentRegistration = () => {
     // inserting the full name into the username column.
     const { error: dbError } = await supabase
       .from('students')
-      .insert([{ username: fullName, email, course, section, year_level: yearLevel }]);
+      .insert([{
+        student_id_number: studentIdNumber,
+        username: fullName,
+        email,
+        course,
+        section: 'N/A', // Add this line
+        phone_number: phoneNumber,
+      }]);
 
     if (dbError) {
       alert(dbError.message);
@@ -75,6 +102,18 @@ const StudentRegistration = () => {
           <header>Student Registration</header>
           <form onSubmit={handleSubmit}>
             <div className="field input">
+              <label htmlFor="studentIdNumber">Student ID Number</label>
+              <input
+                type="text"
+                name="studentIdNumber"
+                id="studentIdNumber"
+                placeholder="Enter your student ID number"
+                autoComplete="off"
+                required
+                onChange={handleChange}
+              />
+            </div>
+            <div className="field input">
               <label htmlFor="fullName">Full Name</label>
               <input
                 type="text"
@@ -101,67 +140,34 @@ const StudentRegistration = () => {
               />
             </div>
             <div className="field input">
+              <label htmlFor="phoneNumber">Phone Number</label>
+              <input
+                type="tel"
+                name="phoneNumber"
+                id="phoneNumber"
+                placeholder="Enter your phone number"
+                autoComplete="off"
+                required
+                onChange={handleChange}
+                value={formData.phoneNumber}
+              />
+            </div>
+            <div className="field input">
               <label htmlFor="course">Course</label>
               <select
                 name="course"
                 id="course"
                 required
                 onChange={handleChange}
-                defaultValue=""
+                value={formData.course}
+                disabled={loadingCourses}
               >
-                <option value="" disabled>Select a course</option>
-                <option value="Bachelor of Science in Computer Science">Bachelor of Science in Computer Science</option>
-                <option value="Bachelor of Science in Information Technology">Bachelor of Science in Information Technology</option>
-                <option value="Bachelor of Science in Computer Engineering">Bachelor of Science in Computer Engineering</option>
-                <option value="Bachelor of Science in Business Administration">Bachelor of Science in Business Administration</option>
-                <option value="Bachelor of Science in Accountancy">Bachelor of Science in Accountancy</option>
-                <option value="Bachelor of Science in Hospitality Management">Bachelor of Science in Hospitality Management</option>
-                <option value="Bachelor of Arts in Communication">Bachelor of Arts in Communication</option>
-                <option value="Bachelor of Multimedia Arts">Bachelor of Multimedia Arts</option>
-                <option value="Bachelor of Science in Tourism Managements">Bachelor of Science in Tourism Managements</option>
-              </select>
-            </div>
-            <div className="field input">
-              <label htmlFor="section">Section</label>
-              <select
-                name="section"
-                id="section"
-                required
-                onChange={handleChange}
-                defaultValue=""
-              >
-                <option value="" disabled>Select a section</option>
-                <option value="Section 1">Section 1</option>
-                <option value="Section 2">Section 2</option>
-                <option value="Section 3">Section 3</option>
-                <option value="Section 4">Section 4</option>
-                <option value="Section 5">Section 5</option>
-                <option value="Section 5">Section 6</option>
-                <option value="Section 5">Section 7</option>
-                <option value="Section 5">Section 8</option>
-                <option value="Section 5">Section 9</option>
-                <option value="Section 5">Section 10</option>
-                <option value="Section 5">Section 11</option>
-                <option value="Section 5">Section 12</option>
-                <option value="Section 5">Section 13</option>
-                <option value="Section 5">Section 14</option>
-                <option value="Section 5">Section 15</option>
-              </select>
-            </div>
-            <div className="field input">
-              <label htmlFor="yearLevel">Year Level</label>
-              <select
-                name="yearLevel"
-                id="yearLevel"
-                required
-                onChange={handleChange}
-                defaultValue=""
-              >
-                <option value="" disabled>Select year level</option>
-                <option value="1st year">1st year</option>
-                <option value="2nd year">2nd year</option>
-                <option value="3rd year">3rd year</option>
-                <option value="4th year">4th year</option>
+                <option value="" disabled>
+                  {loadingCourses ? "Loading courses..." : "Select a course"}
+                </option>
+                {courses.map((course) => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
               </select>
             </div>
             <div className="field input">

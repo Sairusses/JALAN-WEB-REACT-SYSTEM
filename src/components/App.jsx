@@ -16,6 +16,8 @@ import Setting from './setting'; // Teacher settings
 import Admin from './admin'; // Admin dashboard
 import AdminSetting from './adminsetting'; // Admin settings
 import Offline from './Offline';
+import Custom from './Custom'; // <-- Add this import
+import Customsetting from './Customsetting'; // Admin settings
 
 const App = () => {
   return (
@@ -32,6 +34,7 @@ const App = () => {
       <Route path="/home" element={<Home />} /> {/* Teacher Dashboard */}
       <Route path="/st-home" element={<StHome />} /> {/* Student Dashboard */}
       <Route path="/admin-home" element={<Admin />} /> {/* Admin Dashboard */}
+      <Route path="/custom" element={<Custom />} /> {/* Custom User Page */}
 
       {/* Other Pages */}
       <Route path="/scanExam" element={<ScanExam />} />
@@ -42,6 +45,7 @@ const App = () => {
       <Route path="/st-setting" element={<StSetting />} />
       <Route path="/setting" element={<Setting />} /> {/* Teacher Settings */}
       <Route path="/adminsetting" element={<AdminSetting />} /> {/* Admin Settings */}
+      <Route path="/customsetting" element={<Customsetting />} /> {/* Custom User Settings */}
 
       {/* Offline Fallback */}
       <Route path="/offline" element={<Offline />} />

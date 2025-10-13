@@ -1,19 +1,23 @@
 import "/src/components/style.css";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient"; 
+import { supabase } from "../supabaseClient";
+import { FaCopy, FaEdit, FaTrash, FaCheckCircle } from "react-icons/fa";
+
+const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+const terms = ["1st Term", "2nd Term"];
 
 const AnswerSheet = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [answerKeys, setAnswerKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // Modal state for exam details
   const [showModal, setShowModal] = useState(false);
   const [currentAnswerKey, setCurrentAnswerKey] = useState(null);
-  
-  // Updated exam details state to include "term"
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+
   const [examDetailsForm, setExamDetailsForm] = useState({
     yearLevel: "",
     term: "",
@@ -23,44 +27,19 @@ const AnswerSheet = () => {
     examType: "",
   });
 
-  // Dropdown options
-  const yearLevelOptions = ["1st year", "2nd year", "3rd year", "4th year"];
-  
-  // New term options array
-  const termOptions = ["1st Term", "2nd Term"];
-
-  const courseOptions = [
-    "Bachelor of Science in Computer Science",
-    "Bachelor of Science in Information Technology",
-    "Bachelor of Science in Computer Engineering",
-    "Bachelor of Science in Business Administration",
-    "Bachelor of Science in Accountancy",
-    "Bachelor of Science in Hospitality Management",
-    "Bachelor of Arts in Communication",
-    "Bachelor of Multimedia Arts",
-    "Bachelor of Science in Tourism Managements",
-  ];
-  const sectionOptions = ["Section 1", "Section 2", "Section 3", "Section 4", "Section 5", "Section 6", "Section 7", "Section 8", "Section 9", "Section 10"];
-  const subjectOptions = [
-    "Subject 1",
-    "Subject 2",
-    "Subject 3",
-    "Subject 4",
-    "Subject 5",
-    "Subject 6",
-    "Subject 7",
-    "Subject 8",
-    "Subject 9",
-    "Subject 10",
-    "Subject 11",
-    "Subject 12",
-    "Subject 13",
-    "Subject 14",
-    "Subject 15",
-  ];
+  const [courseOptions, setCourseOptions] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
+  const [subjectOptions, setSubjectOptions] = useState([]);
   const examTypeOptions = ["Prelim", "Midterm", "Pre-Final", "Final"];
 
-  // Fetch answer keys for the current user
+  useEffect(() => {
+    async function fetchOptions() {
+      const { data: courses } = await supabase.from("courses").select("*");
+      setCourseOptions(courses || []);
+    }
+    fetchOptions();
+  }, []);
+
   useEffect(() => {
     async function fetchData() {
       const {
@@ -69,7 +48,6 @@ const AnswerSheet = () => {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        console.error("Not logged in or error:", userError);
         setLoading(false);
         return;
       }
@@ -79,21 +57,24 @@ const AnswerSheet = () => {
         .select("*")
         .eq("user_id", user.id);
 
-      if (error) {
-        console.error("Error fetching data:", error);
-      } else {
-        setAnswerKeys(data || []);
-      }
+      if (!error) setAnswerKeys(data || []);
       setLoading(false);
     }
     fetchData();
   }, []);
 
-  const handleEdit = (id) => {
-    navigate("/answerKey", { state: { answerKeyId: id } });
+  // Helper for navigation with refresh
+  const navigateWithRefresh = (path, state = {}) => {
+    navigate(path, { state });
+    setTimeout(() => {
+      window.location.reload();
+    }, 200); // 0.2 seconds
   };
 
-  // Show modal when teacher clicks "Start Checking"
+  const handleEdit = (id) => {
+    navigateWithRefresh("/answerKey", { answerKeyId: id });
+  };
+
   const handleStartChecking = (key) => {
     setCurrentAnswerKey(key);
     setShowModal(true);
@@ -104,25 +85,21 @@ const AnswerSheet = () => {
 
   const handleExamDetailsSubmit = (e) => {
     e.preventDefault();
-    // Simple validation: ensure all fields are filled
     const { yearLevel, term, course, section, subject, examType } = examDetailsForm;
     if (!yearLevel || !term || !course || !section || !subject || !examType) {
       alert("Please fill in all exam details.");
       return;
     }
-    // Determine maxScore from answer key
     let maxScore = 0;
     try {
       const answersArr = JSON.parse(currentAnswerKey.answers);
       if (Array.isArray(answersArr)) {
         maxScore = answersArr.length;
       }
-    } catch (err) {
-      console.error("Error parsing answers:", err);
-    }
-    // Bundle exam details (including term) and navigate to scanExam
-    navigate("/scanExam", { 
-      state: { 
+    } catch (err) {}
+
+    navigateWithRefresh("/scanExam", {
+      state: {
         testerMode: true,
         examDetails: {
           examCode: currentAnswerKey.exam_code,
@@ -134,23 +111,25 @@ const AnswerSheet = () => {
     });
   };
 
-  // Delete an answer key record
+  // Delete confirmation modal
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this answer key?")) {
-      const { error } = await supabase
-        .from("answer_keys")
-        .delete()
-        .eq("id", id);
-      if (error) {
-        console.error("Error deleting answer key", error);
-        alert("Error deleting answer key: " + error.message);
-      } else {
-        setAnswerKeys(answerKeys.filter((key) => key.id !== id));
-      }
-    }
+    setDeleteId(id);
+    setShowDeleteModal(true);
   };
 
-  // Helper function to format the answer key from a JSON string
+  const confirmDelete = async () => {
+    const { error } = await supabase
+      .from("answer_keys")
+      .delete()
+      .eq("id", deleteId);
+    if (!error) {
+      setAnswerKeys((prev) => prev.filter((key) => key.id !== deleteId));
+    }
+    setShowDeleteModal(false);
+    setDeleteId(null);
+  };
+
+  // Format answer key
   const formatAnswerKey = (answers) => {
     try {
       const parsed = JSON.parse(answers);
@@ -163,62 +142,153 @@ const AnswerSheet = () => {
     }
   };
 
-  // Filter answer keys based on exam_code field
+  // Copy answer key to clipboard
+  const handleCopyAnswers = (answers) => {
+    const answerString = formatAnswerKey(answers);
+    navigator.clipboard.writeText(answerString);
+    alert("Answer key copied to clipboard!");
+  };
+
   const filteredKeys = answerKeys.filter((key) =>
     key.exam_code?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Filtered courses based on yearLevel and term
+  const filteredCourses = courseOptions.filter(
+    (c) => c.year_level === examDetailsForm.yearLevel && (!c.term || c.term === examDetailsForm.term)
+  );
+
+  // When course changes, update subjects and sections
+  useEffect(() => {
+    const selectedCourse = filteredCourses.find((c) => c.course === examDetailsForm.course);
+    let sections = [];
+    let subjects = [];
+    if (selectedCourse) {
+      if (Array.isArray(selectedCourse.sections)) {
+        sections = selectedCourse.sections;
+      } else if (typeof selectedCourse.sections === "string") {
+        try {
+          sections = JSON.parse(selectedCourse.sections);
+        } catch {
+          sections = selectedCourse.sections.split(",").map((s) => s.trim());
+        }
+      }
+      if (Array.isArray(selectedCourse.subjects)) {
+        subjects = selectedCourse.subjects;
+      } else if (typeof selectedCourse.subjects === "string") {
+        try {
+          subjects = JSON.parse(selectedCourse.subjects);
+        } catch {
+          subjects = selectedCourse.subjects.split(",").map((s) => s.trim());
+        }
+      }
+    }
+    sections = sections.filter((s, i, arr) => s && arr.indexOf(s) === i);
+    subjects = subjects.filter((s, i, arr) => s && arr.indexOf(s) === i);
+
+    setSectionOptions(sections);
+    setSubjectOptions(subjects);
+    // console logs helpful when debugging routes / data
+    // console.log("Sections options:", sections);
+    // console.log("Subjects options:", subjects);
+  }, [examDetailsForm.course, filteredCourses]);
+
+  // Close modals when location changes OR when component unmounts
+  useEffect(() => {
+    setShowModal(false);
+    setShowDeleteModal(false);
+    return () => {
+      setShowModal(false);
+      setShowDeleteModal(false);
+    };
+  }, [location.pathname]);
+
   return (
     <div className="dashboard-container">
-      <header>
-        <h1>ANSWER SHEET</h1>
-      </header>
-
-      {/* BACK LINK */}
-      <Link to="/home">
-        <div className="back-container">
-          <img src="/src/img/back.png" alt="back" className="back" />
+      {/* TOP NAVBAR copied from answerKey.jsx */}
+      <nav
+        className="top-navbar"
+        style={{
+          width: "100%",
+          height: "64px",
+          background: "#54b948", // Green
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 32px",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          zIndex: 100,
+          boxShadow: "0 2px 8px #0001",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <Link
+            to="/home"
+            onClick={e => {
+              e.preventDefault();
+              navigateWithRefresh("/home");
+            }}
+          >
+            <img src="/src/img/house.png" alt="Back" style={{ width: "32px", marginRight: "12px", cursor: "pointer" }} />
+          </Link>
+          <span style={{ color: "#fff", fontWeight: "bold", fontSize: "22px", letterSpacing: "1px" }}>
+            ANSWER SHEET
+          </span>
         </div>
-      </Link>
-
-      {/* SIDE NAVBAR */}
-      <div className="side-navbar">
-        <div className="dashboard-item">
-          <Link to="/scanExam">
-            <div className="icon">
-              <img src="/src/img/ExamScan.png" alt="Scan Exam" />
-            </div>
-            <p>Scan exam</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
+          <Link
+            to="/scanExam"
+            onClick={e => {
+              e.preventDefault();
+              navigateWithRefresh("/scanExam");
+            }}
+            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
+          >
+            <img src="/src/img/ExamScan.png" alt="Scan Exam" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Scan Exam
           </Link>
-
-          <Link to="/answerKey">
-            <div className="icon">
-              <img src="/src/img/AnswerKeys.png" alt="Answer Key" />
-            </div>
-            <p>Answer Key</p>
+          <Link
+            to="/answerKey"
+            onClick={e => {
+              e.preventDefault();
+              navigateWithRefresh("/answerKey");
+            }}
+            className=""
+            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
+          >
+            <img src="/src/img/AnswerKeys.png" alt="Answer Key" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Answer Key
           </Link>
-
-          <Link to="/answerSheet" className="active">
-            <div className="icon">
-              <img src="/src/img/Sheet.png" alt="Answer Sheet" />
-            </div>
-            <p>Answer Sheet</p>
+          <Link
+            to="/answerSheet"
+            onClick={e => {
+              e.preventDefault();
+              navigateWithRefresh("/answerSheet");
+            }}
+            className="active"
+            style={{ color: "#fff", textDecoration: "underline", fontWeight: 700 }}
+          >
+            <img src="/src/img/Sheet.png" alt="Answer Sheet" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Answer Sheet
           </Link>
-
-          <Link to="/gradeReport">
-            <div className="icon">
-              <img src="/src/img/ReportGrade.png" alt="Grade Report" />
-            </div>
-            <p>Grade Report</p>
+          <Link
+            to="/gradeReport"
+            onClick={e => {
+              e.preventDefault();
+              navigateWithRefresh("/gradeReport");
+            }}
+            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
+          >
+            <img src="/src/img/ReportGrade.png" alt="Grade Report" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Grade Report
           </Link>
         </div>
-      </div>
+      </nav>
 
       {/* MAIN CONTENT */}
-      <div 
-        className="main-content" 
-        style={{ marginLeft: "25px", padding: "20px" }}
-      >
+      <div className="main-content" style={{ marginTop: "84px" }}>
         <div className="search-bar" style={{ marginBottom: "20px" }}>
           <input
             type="text"
@@ -236,19 +306,135 @@ const AnswerSheet = () => {
         </div>
 
         {loading ? (
-          <p>Loading...</p>
+          <div style={{ textAlign: "center", marginTop: "40px" }}>
+            <div className="spinner" style={{
+              width: "40px",
+              height: "40px",
+              border: "4px solid #eee",
+              borderTop: "4px solid #1976d2",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "auto"
+            }} />
+            <p>Loading...</p>
+          </div>
         ) : filteredKeys.length === 0 ? (
           <p>No answer keys found for your account.</p>
         ) : (
-          filteredKeys.map((key) => (
-            <div key={key.id} className="answer-key-item">
-              <h2>Exam Code: {key.exam_code}</h2>
-              <p>Answer Key: {formatAnswerKey(key.answers)}</p>
-              <button onClick={() => handleEdit(key.id)}>Edit</button>
-              <button onClick={() => handleDelete(key.id)}>Delete</button>
-              <button onClick={() => handleStartChecking(key)}>Start Checking</button>
-            </div>
-          ))
+          <div style={{ display: "grid", gap: "20px" }}>
+            {filteredKeys.map((key) => {
+              let numQuestions = 0;
+              try {
+                const arr = JSON.parse(key.answers);
+                if (Array.isArray(arr)) numQuestions = arr.length;
+              } catch {}
+              return (
+                <div key={key.id} className="answer-key-card" style={{
+                  background: "#fff",
+                  borderRadius: "12px",
+                  boxShadow: "0 2px 12px #0001",
+                  padding: "20px",
+                  position: "relative",
+                  transition: "box-shadow 0.2s",
+                  border: "1px solid #eee"
+                }}>
+                  <div style={{ position: "absolute", top: "18px", right: "18px" }}>
+                    <span style={{
+                      background: "#1976d2",
+                      color: "#fff",
+                      borderRadius: "20px",
+                      padding: "4px 12px",
+                      fontSize: "13px",
+                      fontWeight: "bold"
+                    }}>
+                      {numQuestions} Questions
+                    </span>
+                  </div>
+                  <h2 style={{ marginBottom: "8px" }}>
+                    <FaCheckCircle style={{ color: "#81c784", marginRight: "8px" }} />
+                    {key.exam_code}
+                  </h2>
+                  <div style={{ marginBottom: "8px", color: "#888" }}>
+                    <span style={{ marginRight: "16px" }}>
+                      <strong>Reference:</strong> {key.reference || "-"}
+                    </span>
+                    <span>
+                      <strong>Date:</strong> {key.date || "-"}
+                    </span>
+                  </div>
+                  <div style={{ marginBottom: "8px" }}>
+                    <strong>Answer Key:</strong> <span style={{ color: "#1976d2" }}>{formatAnswerKey(key.answers)}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <button
+                      onClick={() => handleEdit(key.id)}
+                      style={{
+                        background: "#e3f2fd",
+                        border: "none",
+                        color: "#1976d2",
+                        borderRadius: "6px",
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center"
+                      }}
+                      title="Edit Answer Key"
+                    >
+                      <FaEdit style={{ marginRight: "6px" }} /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(key.id)}
+                      style={{
+                        background: "#ffebee",
+                        border: "none",
+                        color: "#c62828",
+                        borderRadius: "6px",
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center"
+                      }}
+                      title="Delete Answer Key"
+                    >
+                      <FaTrash style={{ marginRight: "6px" }} /> Delete
+                    </button>
+                    <button
+                      onClick={() => handleStartChecking(key)}
+                      style={{
+                        background: "#81c784",
+                        border: "none",
+                        color: "#fff",
+                        borderRadius: "6px",
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center"
+                      }}
+                      title="Start Checking"
+                    >
+                      <FaCheckCircle style={{ marginRight: "6px" }} /> Start Checking
+                    </button>
+                    <button
+                      onClick={() => handleCopyAnswers(key.answers)}
+                      style={{
+                        background: "#fffde7",
+                        border: "none",
+                        color: "#fbc02d",
+                        borderRadius: "6px",
+                        padding: "8px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center"
+                      }}
+                      title="Copy Answer Key"
+                    >
+                      <FaCopy style={{ marginRight: "6px" }} /> Copy Key
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -276,42 +462,50 @@ const AnswerSheet = () => {
                 <label>Year Level:</label>
                 <select name="yearLevel" value={examDetailsForm.yearLevel} onChange={handleExamDetailsChange} required>
                   <option value="">Select Year Level</option>
-                  {yearLevelOptions.map((lvl, i) => <option key={i} value={lvl}>{lvl}</option>)}
+                  {yearLevels.map((lvl, i) => <option key={i} value={lvl}>{lvl}</option>)}
                 </select>
               </div>
               <div style={{ marginBottom: "10px" }}>
                 <label>Term:</label>
                 <select name="term" value={examDetailsForm.term} onChange={handleExamDetailsChange} required>
                   <option value="">Select Term</option>
-                  {termOptions.map((term, i) => <option key={i} value={term}>{term}</option>)}
+                  {terms.map((term, i) => <option key={i} value={term}>{term}</option>)}
                 </select>
               </div>
               <div style={{ marginBottom: "10px" }}>
                 <label>Course:</label>
                 <select name="course" value={examDetailsForm.course} onChange={handleExamDetailsChange} required>
                   <option value="">Select Course</option>
-                  {courseOptions.map((course, i) => <option key={i} value={course}>{course}</option>)}
+                  {filteredCourses.flat().map((course, i) => (
+                    <option key={i} value={course.course}>{course.course}</option>
+                  ))}
                 </select>
               </div>
               <div style={{ marginBottom: "10px" }}>
                 <label>Section:</label>
                 <select name="section" value={examDetailsForm.section} onChange={handleExamDetailsChange} required>
                   <option value="">Select Section</option>
-                  {sectionOptions.map((sec, i) => <option key={i} value={sec}>{sec}</option>)}
+                  {sectionOptions.flat().map((sec, i) => (
+                    <option key={i} value={sec}>{sec}</option>
+                  ))}
                 </select>
               </div>
               <div style={{ marginBottom: "10px" }}>
                 <label>Subject:</label>
                 <select name="subject" value={examDetailsForm.subject} onChange={handleExamDetailsChange} required>
                   <option value="">Select Subject</option>
-                  {subjectOptions.map((sub, i) => <option key={i} value={sub}>{sub}</option>)}
+                  {subjectOptions.flat().map((sub, i) => (
+                    <option key={i} value={sub}>{sub}</option>
+                  ))}
                 </select>
               </div>
               <div style={{ marginBottom: "10px" }}>
                 <label>Exam Type:</label>
                 <select name="examType" value={examDetailsForm.examType} onChange={handleExamDetailsChange} required>
                   <option value="">Select Exam Type</option>
-                  {examTypeOptions.map((type, i) => <option key={i} value={type}>{type}</option>)}
+                  {examTypeOptions.map((type, i) => (
+                    <option key={i} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
@@ -322,6 +516,72 @@ const AnswerSheet = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: "#fff",
+            padding: "24px",
+            borderRadius: "10px",
+            minWidth: "320px",
+            textAlign: "center"
+          }}>
+            <h3>Delete Answer Key?</h3>
+            <p>This action cannot be undone.</p>
+            <div style={{ display: "flex", gap: "20px", justifyContent: "center", marginTop: "18px" }}>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                style={{
+                  background: "#e3f2fd",
+                  border: "none",
+                  color: "#1976d2",
+                  borderRadius: "6px",
+                  padding: "8px 18px",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  background: "#ffebee",
+                  border: "none",
+                  color: "#c62828",
+                  borderRadius: "6px",
+                  padding: "8px 18px",
+                  cursor: "pointer"
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spinner animation CSS */}
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg);}
+            100% { transform: rotate(360deg);}
+          }
+          .answer-key-card:hover {
+            box-shadow: 0 4px 24px #1976d233;
+            border: 1px solid #1976d2;
+          }
+        `}
+      </style>
     </div>
   );
 };

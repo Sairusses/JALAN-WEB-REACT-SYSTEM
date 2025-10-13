@@ -43,7 +43,7 @@ const Setting = () => {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <Link to="/admin-home">
+          <Link to="/Custom">
             <img src="/src/img/house.png" alt="Back" style={{ width: "32px", marginRight: "12px", cursor: "pointer" }} />
           </Link>
           <span style={{ color: "#fff", fontWeight: "bold", fontSize: "22px", letterSpacing: "1px" }}>

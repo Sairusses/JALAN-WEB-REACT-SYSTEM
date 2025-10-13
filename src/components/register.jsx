@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 const Register = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    teacherIdNumber: '', // <-- Added
     username: '',
     email: '',
     password: '',
@@ -18,7 +19,7 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { username, email, password, confirmPassword } = formData;
+    const { teacherIdNumber, username, email, password, confirmPassword } = formData;
 
     if (password !== confirmPassword) {
       alert("Passwords do not match!");
@@ -38,12 +39,19 @@ const Register = () => {
 
     // IMPORTANT: Use the auth user id as the teacher id.
     const teacherId = authData.user.id;
-    
+
     // Use upsert to insert or update teacher record
     const { error: dbError } = await supabase
       .from('teachers')
-      .upsert([{ id: teacherId, username, email }], { onConflict: 'email' });
-    
+      .upsert([
+        {
+          id: teacherId,
+          teacher_id_number: teacherIdNumber, // <-- Added
+          username,
+          email
+        }
+      ], { onConflict: 'email' });
+
     if (dbError) {
       alert(dbError.message);
       return;
@@ -75,7 +83,18 @@ const Register = () => {
           <header>Teacher Registration</header>
           <form onSubmit={handleSubmit}>
             <div className="field input">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="teacherIdNumber">Teacher ID Number</label>
+              <input
+                type="text"
+                name="teacherIdNumber"
+                id="teacherIdNumber"
+                autoComplete="off"
+                required
+                onChange={handleChange}
+              />
+            </div>
+            <div className="field input">
+              <label htmlFor="username">Full Name</label>
               <input
                 type="text"
                 name="username"

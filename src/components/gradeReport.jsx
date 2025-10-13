@@ -1,7 +1,9 @@
 import "/src/components/style.css";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const GradeReport = () => {
   // Data arrays
@@ -86,10 +88,21 @@ const GradeReport = () => {
   const [passRate, setPassRate] = useState(null);
   const [topScorer, setTopScorer] = useState(null);
   const [scoreDistribution, setScoreDistribution] = useState([]);
+  const [questionStats, setQuestionStats] = useState([]);
+  const [lowestScore, setLowestScore] = useState(null);
+  const [highestScore, setHighestScore] = useState(null);
+  const [medianScore, setMedianScore] = useState(null);
+  const [perfectCount, setPerfectCount] = useState(0);
+  const [failCount, setFailCount] = useState(0);
 
   // New state variables for editing scores
   const [editingScoreId, setEditingScoreId] = useState(null); // Track the row being edited
   const [newScore, setNewScore] = useState(""); // Track the new score being entered
+
+  // New state variables for database courses, sections, and subjects
+  const [dbCourses, setDbCourses] = useState([]);
+  const [dbSections, setDbSections] = useState([]);
+  const [dbSubjects, setDbSubjects] = useState([]);
 
   // Load filter settings from localStorage on mount
   useEffect(() => {
@@ -228,7 +241,7 @@ const GradeReport = () => {
       
       // For teacher view, fetch grade reports that match the selected filters
       const { data, error } = await supabase
-        .from("grade_reports")
+        .from("grade_report")
         .select(`
           id,
           teacher_id,
@@ -241,7 +254,7 @@ const GradeReport = () => {
           status,
           term,
           created_at,
-          student:students(username, year_level)
+          student:students(username, year_level, student_id_number) // <-- Added student_id_number
         `)
         .eq("course", selectedCourse.name)
         .eq("section", selectedSection)
@@ -254,13 +267,8 @@ const GradeReport = () => {
         console.error("Error fetching grade reports:", error);
         setGradeReports([]);
       } else {
-        const filteredData = (data || []).filter((report) => {
-          const dbYear = report.student?.year_level?.trim().toLowerCase() || "";
-          const selYear = selectedYearLevel.trim().toLowerCase();
-          return dbYear === selYear;
-        });
-        // Sort by score descending (if score is provided)
-        const sorted = filteredData.sort((a, b) => {
+        // Remove year level filtering so all students for the selected course/section/subject/exam/term are shown
+        const sorted = (data || []).sort((a, b) => {
           const scoreA = a.score !== null ? a.score : 0;
           const scoreB = b.score !== null ? b.score : 0;
           return scoreB - scoreA;
@@ -268,48 +276,91 @@ const GradeReport = () => {
         setGradeReports(sorted);
 
         // Perform data analysis
-        analyzeData(filteredData);
+        analyzeData(data || []);
       }
       setLoadingGradeReports(false);
     }
   };
 
-  // Perform data analysis
+  // Enhanced data analysis function
   const analyzeData = (reports) => {
     if (reports.length === 0) {
       setAverageScore(null);
       setPassRate(null);
       setTopScorer(null);
       setScoreDistribution([]);
+      setQuestionStats([]);
+      setLowestScore(null);
+      setHighestScore(null);
+      setMedianScore(null);
+      setPerfectCount(0);
+      setFailCount(0);
       return;
     }
-  
+
     // Calculate average score
-    const totalScore = reports.reduce((sum, report) => sum + (report.score || 0), 0);
+    const scores = reports.map((report) => report.score || 0);
+    const totalScore = scores.reduce((sum, score) => sum + score, 0);
     const avgScore = (totalScore / reports.length).toFixed(2);
     setAverageScore(avgScore);
-  
+
     // Calculate pass rate (score >= 75)
-    const passingCount = reports.filter((report) => report.score >= 75).length;
+    const passingCount = scores.filter((score) => score >= 75).length;
     const passPercentage = ((passingCount / reports.length) * 100).toFixed(2);
     setPassRate(passPercentage);
-  
+
     // Find top scorers (handle ties)
-    const maxScore = Math.max(...reports.map((report) => report.score || 0));
+    const maxScore = Math.max(...scores);
     const topScorers = reports
       .filter((report) => report.score === maxScore)
       .map((report) => report.student?.username || "N/A");
-    setTopScorer(topScorers.join(", ")); // Join names with a comma
-  
+    setTopScorer(topScorers.join(", "));
+
     // Calculate score distribution
     const distribution = [0, 0, 0, 0]; // 0-25, 26-50, 51-75, 76-100
-    reports.forEach((report) => {
-      if (report.score <= 25) distribution[0]++;
-      else if (report.score <= 50) distribution[1]++;
-      else if (report.score <= 75) distribution[2]++;
+    scores.forEach((score) => {
+      if (score <= 25) distribution[0]++;
+      else if (score <= 50) distribution[1]++;
+      else if (score <= 75) distribution[2]++;
       else distribution[3]++;
     });
     setScoreDistribution(distribution);
+
+    // Lowest, highest, median, perfect, fail count
+    setLowestScore(Math.min(...scores));
+    setHighestScore(maxScore);
+    const sortedScores = [...scores].sort((a, b) => a - b);
+    const mid = Math.floor(sortedScores.length / 2);
+    setMedianScore(
+      sortedScores.length % 2 === 0
+        ? ((sortedScores[mid - 1] + sortedScores[mid]) / 2).toFixed(2)
+        : sortedScores[mid].toFixed(2)
+    );
+    setPerfectCount(scores.filter((score) => score === 100).length);
+    setFailCount(scores.filter((score) => score < 75).length);
+
+    // Per-question analysis (assuming each report has answers: { [questionNumber]: true/false })
+    // If you don't have answers, skip this part or adjust to your schema
+    const questionStats = [];
+    if (reports[0]?.answers) {
+      const questionNumbers = Object.keys(reports[0].answers);
+      questionNumbers.forEach((qNum) => {
+        let right = 0, wrong = 0;
+        reports.forEach((report) => {
+          if (report.answers[qNum]) right++;
+          else wrong++;
+        });
+        questionStats.push({
+          question: qNum,
+          right,
+          wrong,
+          needsReview: wrong > right // If more students got it wrong
+        });
+      });
+      setQuestionStats(questionStats);
+    } else {
+      setQuestionStats([]);
+    }
   };
   
 
@@ -339,7 +390,7 @@ const handleSaveScore = async (id) => {
 
   // Update the score in the database
   const { error } = await supabase
-    .from("grade_reports")
+    .from("grade_report")
     .update({ score: parseFloat(newScore) })
     .eq("id", id);
 
@@ -377,60 +428,183 @@ const handleSaveScore = async (id) => {
     setNewScore("");
   };
 
+  // Fetch courses, sections, and subjects from Supabase on mount
+  useEffect(() => {
+    const fetchCourses = async () => {
+      if (!selectedYearLevel || !selectedTerm) return; // Only fetch when both are selected
+      const { data, error } = await supabase
+        .from("courses")
+        .select("*")
+        .eq("year_level", selectedYearLevel);
+
+      if (!error && data) {
+        setDbCourses(data.map(c => c.course));
+        // Find the course object for the selected course
+        const selectedCourseObj = data.find(c => c.course === selectedCourse?.name);
+        // If you want to filter sections/subjects by term:
+        const termIndex = selectedTerm === "1st Term" ? 0 : 1;
+        setDbSections(selectedCourseObj ? selectedCourseObj.sections[termIndex] : []);
+        setDbSubjects(selectedCourseObj ? selectedCourseObj.subjects[termIndex] : []);
+      }
+    };
+    fetchCourses();
+  }, [selectedYearLevel, selectedTerm, selectedCourse]);
+
+  // Download PDF report
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    // Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text("Grade Report", 105, 20, { align: "center" });
+
+    // Subheader
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(13);
+    doc.setTextColor(60, 179, 113); // Modern green
+    doc.text(
+      `${selectedCourse?.name || ""} | ${selectedSection || ""} | ${selectedSubject || ""} | ${selectedExam || ""}`,
+      105,
+      28,
+      { align: "center" }
+    );
+    doc.setTextColor(0, 0, 0);
+
+    // Table Header
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setFillColor(230, 247, 237); // Light green
+    doc.rect(15, 38, 180, 10, "F");
+    doc.text("Rank", 20, 45);
+    doc.text("Name", 40, 45);
+    doc.text("Student ID", 80, 45);
+    doc.text("Score", 120, 45);
+    doc.text("Status", 150, 45);
+
+    // Table Rows
+    let y = 55;
+    doc.setFont("helvetica", "normal");
+    gradeReports.forEach((report, idx) => {
+      // Alternate row color
+      if (idx % 2 === 0) doc.setFillColor(255, 255, 255);
+      else doc.setFillColor(245, 245, 245);
+      doc.rect(15, y - 7, 180, 9, "F");
+
+      // Data
+      doc.text(String(idx + 1), 20, y);
+      doc.text(
+        report.student?.username || report.student_id || "N/A",
+        40,
+        y
+      );
+      doc.text(
+        report.student?.student_id_number || "N/A",
+        80,
+        y
+      );
+      doc.text(
+        report.score !== null ? String(report.score) : "N/A",
+        120,
+        y
+      );
+      doc.setTextColor(report.score < 75 ? 220 : 60, report.score < 75 ? 20 : 179, report.score < 75 ? 60 : 113);
+      doc.text(report.score < 75 ? "Failed" : "Passed", 150, y);
+      doc.setTextColor(0, 0, 0);
+      y += 10;
+      if (y > 260) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+
+    // Data Analysis Section
+    y += 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Summary", 15, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    y += 8;
+    doc.text(`Average Score: ${averageScore || "N/A"}`, 15, y);
+    doc.text(`Pass Rate: ${passRate ? `${passRate}%` : "N/A"}`, 70, y);
+    doc.text(`Top Scorer: ${topScorer || "N/A"}`, 130, y);
+
+    // Certification Section
+    y += 20;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(13);
+    doc.text(
+      "This is to certify that the grades listed above are accurate and official.",
+      15,
+      y
+    );
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.text("Confirmed by:", 15, y);
+    doc.line(45, y + 1, 120, y + 1); // Signature line
+    y += 10;
+    doc.text("Professor's Signature", 50, y);
+
+    // Save PDF
+    doc.save("grade-report.pdf");
+  };
+
   return (
     <div className="dashboard-container">
-      <header>
-        <h1>GRADE REPORT</h1>
-      </header>
-
-      {/* BACK LINK */}
-      <Link to="/home">
-        <div className="back-container">
-          <img src="/src/img/back.png" alt="back" className="back" />
+      {/* TOP NAVBAR (green, consistent with other pages) */}
+      <nav
+        className="top-navbar"
+        style={{
+          width: "100%",
+          height: "64px",
+          background: "#54b948", // Green
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 32px",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          zIndex: 100,
+          boxShadow: "0 2px 8px #0001",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <Link to="/home">
+            <img src="/src/img/house.png" alt="Back" style={{ width: "32px", marginRight: "12px", cursor: "pointer" }} />
+          </Link>
+          <span style={{ color: "#fff", fontWeight: "bold", fontSize: "22px", letterSpacing: "1px" }}>
+            GRADE REPORT
+          </span>
         </div>
-      </Link>
-
-      {/* SIDEBAR */}
-      <div className="side-navbar">
-        <div className="dashboard-item">
-          <Link to="/scanExam">
-            <div className="icon">
-              <img src="/src/img/ExamScan.png" alt="Scan Exam" />
-            </div>
-            <p>Scan exam</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
+          <Link to="/scanExam" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
+            <img src="/src/img/ExamScan.png" alt="Scan Exam" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Scan Exam
           </Link>
-          <Link to="/answerKey">
-            <div className="icon">
-              <img src="/src/img/AnswerKeys.png" alt="Answer Key" />
-            </div>
-            <p>Answer Key</p>
+          <Link to="/answerKey" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
+            <img src="/src/img/AnswerKeys.png" alt="Answer Key" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Answer Key
           </Link>
-          <Link to="/answerSheet">
-            <div className="icon">
-              <img src="/src/img/Sheet.png" alt="Answer Sheet" />
-            </div>
-            <p>Answer Sheet</p>
+          <Link to="/answerSheet" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
+            <img src="/src/img/Sheet.png" alt="Answer Sheet" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Answer Sheet
           </Link>
-          {userType === "teacher" ? (
-            <Link to="/gradeReport" className="active">
-              <div className="icon">
-                <img src="/src/img/ReportGrade.png" alt="Grade Report" />
-              </div>
-              <p>Grade Report</p>
-            </Link>
-          ) : (
-            <Link to="/st-gradeReport" className="active">
-              <div className="icon">
-                <img src="/src/img/report-card.png" alt="My Grades" />
-              </div>
-              <p>My Grades</p>
-            </Link>
-          )}
+          <Link to="/gradeReport" className="active" style={{ color: "#fff", textDecoration: "underline", fontWeight: 700 }}>
+            <img src="/src/img/ReportGrade.png" alt="Grade Report" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
+            Grade Report
+          </Link>
         </div>
-      </div>
+      </nav>
 
       {/* MAIN CONTENT */}
-      <div className="main-content" style={{ marginLeft: "25px", padding: "20px" }}>
+      <div className="main-content" style={{ marginTop: "84px", padding: "20px" }}>
         {selectedYearLevel === null ? (
           <div className="year-level-selection">
             <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Select Year Level</h2>
@@ -497,7 +671,7 @@ const handleSaveScore = async (id) => {
             <div className="course-selection">
               <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Select Course</h2>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "center" }}>
-                {filteredCourses.map((course, index) => (
+                {dbCourses.map((course, index) => (
                   <div
                     key={index}
                     className="course-folder"
@@ -510,23 +684,7 @@ const handleSaveScore = async (id) => {
                       onClick={() => setSelectedCourse({ name: course, id: index })}
                     />
                     <p>{course}</p>
-                    <img
-                      src="/src/img/favourite.png"
-                      alt="favorite"
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        position: "absolute",
-                        top: "5px",
-                        right: "5px",
-                        cursor: "pointer",
-                        opacity: favorites.courses.includes(course) ? 1 : 0.3,
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite("course", course);
-                      }}
-                    />
+                    {/* ...favorite logic... */}
                   </div>
                 ))}
               </div>
@@ -542,7 +700,7 @@ const handleSaveScore = async (id) => {
             </div>
             <h2 style={{ textAlign: "center" }}>{selectedCourse.name}</h2>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "center", marginTop: "20px" }}>
-              {filteredSections.map((section, index) => (
+              {dbSections.map((section, index) => (
                 <div
                   key={index}
                   className="section-folder"
@@ -594,7 +752,7 @@ const handleSaveScore = async (id) => {
               {selectedCourse.name} - {selectedSection}
             </h2>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "center", marginTop: "20px" }}>
-              {filteredSubjects.map((subject, index) => (
+              {dbSubjects.map((subject, index) => (
                 <div
                   key={index}
                   className="subject-folder"
@@ -830,11 +988,18 @@ const handleSaveScore = async (id) => {
                     </div>
 
                     {/* Grade Reports Table */}
-                    <table border="1" cellPadding="8" cellSpacing="0" style={{ margin: "0 auto", width: "80%", textAlign: "center" }}>
+                    <table
+                      id="grade-report-table"
+                      border="1"
+                      cellPadding="8"
+                      cellSpacing="0"
+                      style={{ margin: "0 auto", width: "80%", textAlign: "center" }}
+                    >
                       <thead>
                         <tr>
                           <th style={{ textAlign: "center" }}>Top</th>
                           <th style={{ textAlign: "center" }}>Name</th>
+                          <th style={{ textAlign: "center" }}>Student ID Number</th> {/* <-- Added column */}
                           <th style={{ textAlign: "center" }}>Exam</th>
                           <th style={{ textAlign: "center" }}>Score</th>
                           <th style={{ textAlign: "center" }}>Actions</th>
@@ -845,10 +1010,11 @@ const handleSaveScore = async (id) => {
                           <tr
                             key={report.id}
                             style={{
-                              backgroundColor: report.score < 75 ? "rgba(255, 0, 0, 0.3)" : "transparent", // More intense red for failing scores
+                              backgroundColor: report.score < 75 ? "rgba(255, 0, 0, 0.3)" : "transparent",
                             }}
                           >
                             <td style={{ textAlign: "center" }}>
+                              {/* ...existing trophy logic... */}
                               {ranks[index] === 1 ? (
                                 <img src="/src/img/gold-trophy.png" alt="Gold Trophy" style={{ width: "20px" }} />
                               ) : ranks[index] === 2 ? (
@@ -862,10 +1028,15 @@ const handleSaveScore = async (id) => {
                             <td
                               style={{
                                 textAlign: "center",
-                                color: report.score < 75 ? "red" : "black", // Red if score < 75, otherwise black
+                                color: report.score < 75 ? "red" : "black",
                               }}
                             >
                               {report.student && report.student.username ? report.student.username : report.student_id}
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              {report.student && report.student.student_id_number
+                                ? report.student.student_id_number
+                                : "N/A"}
                             </td>
                             <td style={{ textAlign: "center" }}>{report.exam_type}</td>
                             <td style={{ textAlign: "center", fontWeight: "bold" }}>
@@ -886,6 +1057,7 @@ const handleSaveScore = async (id) => {
                               )}
                             </td>
                             <td style={{ textAlign: "center" }}>
+                              {/* ...existing edit/save/cancel logic... */}
                               {editingScoreId === report.id ? (
                                 <>
                                   <button
@@ -936,6 +1108,23 @@ const handleSaveScore = async (id) => {
                         ))}
                       </tbody>
                     </table>
+
+                    {/* Download PDF Button */}
+                    <button
+                      onClick={handleDownloadPDF}
+                      style={{
+                        margin: "20px auto",
+                        display: "block",
+                        padding: "10px 20px",
+                        backgroundColor: "#4CAF50",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "5px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Download Grade Report as PDF
+                    </button>
 
                     {/* IMPORTANT NOTICE */}
                     <div style={{ marginTop: "30px", padding: "20px", backgroundColor: "#f9f9f9", borderRadius: "10px", boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)" }}>
