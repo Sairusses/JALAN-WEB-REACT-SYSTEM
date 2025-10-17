@@ -68,15 +68,47 @@ const AnswerSheet = () => {
     navigate(path, { state });
   };
 
-
   const handleEdit = (id) => {
     navigateWithState("/answerKey", { answerKeyId: id });
     window.location.reload();
   };
 
-  const handleStartChecking = (key) => {
+  const handleStartChecking = async (key) => {
     setCurrentAnswerKey(key);
-    setShowModal(true);
+
+    try {
+      // Fetch the record from Supabase to check if details exist
+      const { data, error } = await supabase
+        .from("answer_keys")
+        .select("id, year_level, term, course, section, subject, exam_type, num_questions")
+        .eq("id", key.id)
+        .single();
+
+      if (error) throw error;
+
+      // Check if all required exam details exist
+      const hasCompleteDetails =
+        data.year_level &&
+        data.term &&
+        data.course &&
+        data.section &&
+        data.subject &&
+        data.exam_type;
+
+      if (hasCompleteDetails) {
+        // Navigate directly to ScanExam, skipping modal
+        navigate("/scanExam", {
+          state: { id: data.id, maxScore: data.num_questions },
+        });
+        window.location.reload();
+      } else {
+        // Show modal for missing details
+        setShowModal(true);
+      }
+    } catch (err) {
+      console.error("Error fetching exam details:", err.message);
+      alert("Failed to check exam details. Please try again.");
+    }
   };
 
   const handleExamDetailsChange = (e) =>
@@ -224,9 +256,7 @@ const AnswerSheet = () => {
 
   return (
     <div className="dashboard-container">
-      {/* TOP NAVBAR copied from answerKey.jsx */}
       <TeacherNavbar activePage="Answer Sheet"/>/
-
       {/* MAIN CONTENT */}
       <div className="main-content" style={{ marginTop: "84px" }}>
         <div className="search-bar" style={{ marginBottom: "20px" }}>
