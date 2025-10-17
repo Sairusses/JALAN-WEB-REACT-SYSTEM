@@ -1,8 +1,9 @@
 import "/src/components/style.css";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { FaCopy, FaEdit, FaTrash, FaCheckCircle } from "react-icons/fa";
+import TeacherNavbar from "./teacher-navbar.jsx";
 
 const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 const terms = ["1st Term", "2nd Term"];
@@ -63,16 +64,14 @@ const AnswerSheet = () => {
     fetchData();
   }, []);
 
-  // Helper for navigation with refresh
-  const navigateWithRefresh = (path, state = {}) => {
+  const navigateWithState = (path, state = {}) => {
     navigate(path, { state });
-    setTimeout(() => {
-      window.location.reload();
-    }, 200); // 0.2 seconds
   };
 
+
   const handleEdit = (id) => {
-    navigateWithRefresh("/answerKey", { answerKeyId: id });
+    navigateWithState("/answerKey", { answerKeyId: id });
+    window.location.reload();
   };
 
   const handleStartChecking = (key) => {
@@ -83,32 +82,52 @@ const AnswerSheet = () => {
   const handleExamDetailsChange = (e) =>
     setExamDetailsForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleExamDetailsSubmit = (e) => {
-    e.preventDefault();
+  const handleExamDetailsSubmit = async () => {
     const { yearLevel, term, course, section, subject, examType } = examDetailsForm;
+
     if (!yearLevel || !term || !course || !section || !subject || !examType) {
       alert("Please fill in all exam details.");
       return;
     }
+
     let maxScore = 0;
     try {
       const answersArr = JSON.parse(currentAnswerKey.answers);
       if (Array.isArray(answersArr)) {
         maxScore = answersArr.length;
       }
-    } catch (err) {}
+    } catch {
+      // ignore parsing errors
+    }
 
-    navigateWithRefresh("/scanExam", {
-      state: {
-        testerMode: true,
-        examDetails: {
-          examCode: currentAnswerKey.exam_code,
+    try {
+      // Update exam details in Supabase
+      const { error } = await supabase
+        .from("answer_keys")
+        .update({
+          year_level: yearLevel,
+          term: term,
+          course: course,
+          section: section,
+          subject: subject,
+          exam_type: examType,
+        })
+        .eq("id", currentAnswerKey.id);
+
+      if (error) alert(error.message.toString());
+
+      // Navigate to ScanExam with only the ID and maxScore
+      navigate("/scanExam", {
+        state: {
+          id: currentAnswerKey.id,
           maxScore,
-          reference: currentAnswerKey.reference,
-          ...examDetailsForm,
         },
-      },
-    });
+      });
+      window.location.reload();
+    } catch (err) {
+      console.error("Error updating exam details:", err.message);
+      alert("Failed to save exam details. Please try again.");
+    }
   };
 
   // Delete confirmation modal
@@ -137,7 +156,7 @@ const AnswerSheet = () => {
         return parsed.join(", ");
       }
       return answers;
-    } catch (err) {
+    } catch {
       return answers;
     }
   };
@@ -206,86 +225,7 @@ const AnswerSheet = () => {
   return (
     <div className="dashboard-container">
       {/* TOP NAVBAR copied from answerKey.jsx */}
-      <nav
-        className="top-navbar"
-        style={{
-          width: "100%",
-          height: "64px",
-          background: "#54b948", // Green
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 32px",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          zIndex: 100,
-          boxShadow: "0 2px 8px #0001",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <Link
-            to="/home"
-            onClick={e => {
-              e.preventDefault();
-              navigateWithRefresh("/home");
-            }}
-          >
-            <img src="/src/img/house.png" alt="Back" style={{ width: "32px", marginRight: "12px", cursor: "pointer" }} />
-          </Link>
-          <span style={{ color: "#fff", fontWeight: "bold", fontSize: "22px", letterSpacing: "1px" }}>
-            ANSWER SHEET
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-          <Link
-            to="/scanExam"
-            onClick={e => {
-              e.preventDefault();
-              navigateWithRefresh("/scanExam");
-            }}
-            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
-          >
-            <img src="/src/img/ExamScan.png" alt="Scan Exam" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Scan Exam
-          </Link>
-          <Link
-            to="/answerKey"
-            onClick={e => {
-              e.preventDefault();
-              navigateWithRefresh("/answerKey");
-            }}
-            className=""
-            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
-          >
-            <img src="/src/img/AnswerKeys.png" alt="Answer Key" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Answer Key
-          </Link>
-          <Link
-            to="/answerSheet"
-            onClick={e => {
-              e.preventDefault();
-              navigateWithRefresh("/answerSheet");
-            }}
-            className="active"
-            style={{ color: "#fff", textDecoration: "underline", fontWeight: 700 }}
-          >
-            <img src="/src/img/Sheet.png" alt="Answer Sheet" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Answer Sheet
-          </Link>
-          <Link
-            to="/gradeReport"
-            onClick={e => {
-              e.preventDefault();
-              navigateWithRefresh("/gradeReport");
-            }}
-            style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}
-          >
-            <img src="/src/img/ReportGrade.png" alt="Grade Report" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Grade Report
-          </Link>
-        </div>
-      </nav>
+      <TeacherNavbar activePage="Answer Sheet"/>/
 
       {/* MAIN CONTENT */}
       <div className="main-content" style={{ marginTop: "84px" }}>
@@ -327,7 +267,7 @@ const AnswerSheet = () => {
               try {
                 const arr = JSON.parse(key.answers);
                 if (Array.isArray(arr)) numQuestions = arr.length;
-              } catch {}
+              } catch { /* empty */ }
               return (
                 <div key={key.id} className="answer-key-card" style={{
                   background: "#fff",
@@ -510,7 +450,7 @@ const AnswerSheet = () => {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px" }}>
                 <button type="button" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit">Proceed to Scan Exam</button>
+                <button type="button" onClick={handleExamDetailsSubmit}>Proceed to Scan Exam</button>
               </div>
             </form>
           </div>
