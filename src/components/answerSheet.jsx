@@ -291,7 +291,6 @@ const AnswerSheet = () => {
                     </span>
                   </div>
                   <h2 style={{ marginBottom: "8px" }}>
-                    <FaCheckCircle style={{ color: "#81c784", marginRight: "8px" }} />
                     {key.exam_code}
                   </h2>
                   <div style={{ marginBottom: "8px", color: "#888" }}>
