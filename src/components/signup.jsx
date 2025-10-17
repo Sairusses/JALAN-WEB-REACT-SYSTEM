@@ -18,7 +18,7 @@ const SignUp = () => {
       />
       <div className="container">
         <div className="box form-box">
-          <header>ROLE</header>A
+          <header>ROLE</header>
           <p>Please select your role:</p>
           <div className="field">
             <Link to="/st-register">Student</Link>

@@ -116,7 +116,7 @@ button:hover {
   font-size: 16px;
   padding: 0 10px;
   border-radius: 5px;
-  border-radius: 1px solid #ccc;
+  border: 1px solid #ccc;
   outline: none;
 }
 
@@ -144,7 +144,10 @@ button:hover {
 }
 
 /* ------------------------------ROLE---------------------------------*/
-
+.field {
+  display: flex;
+  gap: 10px;
+}
 .field a {
   padding: 10px 60px;
   font-size: 16px;
@@ -168,8 +171,6 @@ button:hover {
 .field a:active {
   transform: scale(0.95);
 }
-
-
 
 
 /* ------------------------------HOME DASHBOARD---------------------------------*/
