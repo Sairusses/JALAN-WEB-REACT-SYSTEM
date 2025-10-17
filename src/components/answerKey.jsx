@@ -60,7 +60,7 @@ const AnswerKey = () => {
       if (val > 75 || val < 0) {
         return; 
       }
-      useState(setNumQuestions(val));
+      setNumQuestions(val);
       const newAnswers = [...answers];
       newAnswers.length = val;
       for (let i = 0; i < val; i++) {
