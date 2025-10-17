@@ -57,7 +57,7 @@ const TopNavbar = ({ activePage }) => {
             letterSpacing: "1px",
           }}
         >
-          ANSWER SHEET
+          {activePage ?? "Home"}
         </span>
       </div>
 

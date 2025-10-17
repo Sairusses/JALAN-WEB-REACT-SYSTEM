@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import TeacherNavbar from "./teacher-navbar.jsx";
 
 const GradeReport = () => {
   // Data arrays
@@ -558,50 +559,7 @@ const handleSaveScore = async (id) => {
   return (
     <div className="dashboard-container">
       {/* TOP NAVBAR (green, consistent with other pages) */}
-      <nav
-        className="top-navbar"
-        style={{
-          width: "100%",
-          height: "64px",
-          background: "#54b948", // Green
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 32px",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          zIndex: 100,
-          boxShadow: "0 2px 8px #0001",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <Link to="/home">
-            <img src="/src/img/house.png" alt="Back" style={{ width: "32px", marginRight: "12px", cursor: "pointer" }} />
-          </Link>
-          <span style={{ color: "#fff", fontWeight: "bold", fontSize: "22px", letterSpacing: "1px" }}>
-            GRADE REPORT
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "32px" }}>
-          <Link to="/scanExam" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
-            <img src="/src/img/ExamScan.png" alt="Scan Exam" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Scan Exam
-          </Link>
-          <Link to="/answerKey" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
-            <img src="/src/img/AnswerKeys.png" alt="Answer Key" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Answer Key
-          </Link>
-          <Link to="/answerSheet" style={{ color: "#fff", textDecoration: "none", fontWeight: 500 }}>
-            <img src="/src/img/Sheet.png" alt="Answer Sheet" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Answer Sheet
-          </Link>
-          <Link to="/gradeReport" className="active" style={{ color: "#fff", textDecoration: "underline", fontWeight: 700 }}>
-            <img src="/src/img/ReportGrade.png" alt="Grade Report" style={{ width: "28px", verticalAlign: "middle", marginRight: "6px" }} />
-            Grade Report
-          </Link>
-        </div>
-      </nav>
+      <TeacherNavbar activePage="Grade Report"/>
 
       {/* MAIN CONTENT */}
       <div className="main-content" style={{ marginTop: "84px", padding: "20px" }}>

@@ -1,6 +1,8 @@
+import "/src/components/style.css";
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import TeacherNavbar from "./teacher-navbar.jsx";
 
 const ScanExam = () => {
   const location = useLocation();
@@ -54,7 +56,15 @@ const ScanExam = () => {
   } = examDetails;
 
   return (
-    <div>
+    <>
+      <TeacherNavbar activePage="Scan Exam" />
+      <div style={
+        {
+          margin: "100px",
+        }
+      }>
+
+      </div>
       <h1>Scan Exam</h1>
       <p><b>Exam Code:</b> {exam_code}</p>
       <p><b>Reference:</b> {reference}</p>
@@ -65,7 +75,7 @@ const ScanExam = () => {
       <p><b>Subject:</b> {subject}</p>
       <p><b>Exam Type:</b> {exam_type}</p>
       <p><b>Max Score:</b> {maxScore}</p>
-    </div>
+    </>
   );
 };
 
