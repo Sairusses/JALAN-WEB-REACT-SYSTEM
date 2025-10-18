@@ -155,7 +155,7 @@ const Login = () => {
           `,
         }}
       />
-      <div className="container">
+      <div className="container" style={{minHeight: '100vh'}}>
         <div className="box form-box">
           <header>Login</header>
           <form onSubmit={handleSubmit}>
